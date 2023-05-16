@@ -39,15 +39,18 @@ int main(int argc, char* argv[])
 	{
 		printf("Port number out of range. Allowed: [1,65535]");
 		exit(1);
-	}
-	else if (strlen(argv[1]) > 9 || strspn(argv[1], allowed_chars) != strlen(argv[1]))
+	} 
+
+	/* check if nickname is not too long (9 chars as  per RFC) and consists only of allowed characters*/
+	if (strlen(argv[1]) > 9 || strspn(argv[1], allowed_chars) != strlen(argv[1]))
 	{
 		fprintf(stderr, "Nickname is not allowed/too long.");
 		exit(1);
 	}
 
+	// format nick and user messages to send to server
 	sprintf(nick, "NICK %s\r\n", argv[1]);
-	sprintf(user, "USER %s localhost %s\r\n", nick, nick);
+	sprintf(user, "USER %s 0 * :%s\r\n", nick, nick);
 	
 
 	// hints is used to get addr info about address we're interested in
