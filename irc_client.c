@@ -9,9 +9,11 @@
 #include <unistd.h>
 #include <netdb.h>
 
-#define BUFF_LENGTH 1024
+#define BUFF_LENGTH 2048
 
 // usage: irc_client [nick] [host] [port]
+
+char* find_ping(char* msg);
 
 int main(int argc, char* argv[])
 {
@@ -28,7 +30,7 @@ int main(int argc, char* argv[])
 
 	if (argc != 4)
 	{
-		fprintf(stderr, "Missing arguments: %s <nick> <host> <port>", argv[0]);
+		fprintf(stderr, "Missing arguments: %s <nick> <host> <port>.\n", argv[0]);
 		exit(1);
 	}
 
@@ -37,22 +39,22 @@ int main(int argc, char* argv[])
 
 	if (port < 1 || port > 65535)
 	{
-		printf("Port number out of range. Allowed: [1,65535]");
+		printf("Port number out of range. Allowed: [1,65535].\n");
 		exit(1);
 	} 
 
 	/* check if nickname is not too long (9 chars as  per RFC) and consists only of allowed characters*/
 	if (strlen(argv[1]) > 9 || strspn(argv[1], allowed_chars) != strlen(argv[1]))
 	{
-		fprintf(stderr, "Nickname is not allowed/too long.");
+		fprintf(stderr, "Nickname is not allowed/too long.\n");
 		exit(1);
 	}
 
 	// format nick and user messages to send to server
-	sprintf(nick, "NICK %s\r\n", argv[1]);
-	sprintf(user, "USER %s 0 * :%s\r\n", nick, nick);
+	int len_nick = sprintf(nick, "NICK %s\r\n", argv[1]);
+	int len_user = sprintf(user, "USER %s * %s %s\r\n", argv[1], argv[2], argv[1]);
 	
-
+	
 	// hints is used to get addr info about address we're interested in
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_UNSPEC; // Don't specify if IPv4 or IPv6 address, whichever gets hit
@@ -61,7 +63,7 @@ int main(int argc, char* argv[])
 	// check if socket creation and connection succeeds
 	if (getaddrinfo(host, argv[3], &hints, &host_res) != 0)
 	{
-		fprintf(stderr, "Cannot find server.");
+		fprintf(stderr, "Cannot find server.\n");
 		exit(1);
 	}
 
@@ -80,16 +82,18 @@ int main(int argc, char* argv[])
 	// if no address succeeded
 	if (addr == NULL)
 	{
-		fprintf(stderr, "Could not connect to server.");
+		fprintf(stderr, "Could not connect to server.\n");
 		exit(1);
 	}
 
 	freeaddrinfo(host_res); //  no longer needed
 
 	// send NICK and USER to IRC server
-	send(irc_sock, nick, strlen(nick), 0);
-	send(irc_sock, user, strlen(user), 0);
-
+	fprintf(stdout, "%s%s\n", nick, user);
+	send(irc_sock, nick, len_nick, 0);
+	send(irc_sock, user, len_user, 0);
+	
+	//char pong[BUFF_LENGTH];
 	for (;;)
 	{
 		FD_ZERO(&fds);
@@ -105,19 +109,30 @@ int main(int argc, char* argv[])
 		if (FD_ISSET(irc_sock, &fds))
 		{
 			memset(buffer, 0, BUFF_LENGTH);
+			//memset(pong, 0, BUFF_LENGTH);
 			// if recv returns 0 then server disconnected, sent PING or response
 			if(recv(irc_sock, buffer, BUFF_LENGTH, 0) == 0)
 			{
-				fprintf(stdin, "Server closed connection.\n");
+				fprintf(stdout, "Server closed connection.\n");
 				break;
-			}
-			else if(strncmp(buffer, "PING", 4) == 0)
-			{
-				send(irc_sock, "PONG\r\n", 4, 0);
 			}
 			else
 			{
-				fprintf(stdin, "%s", buffer);
+				fprintf(stdout, "Processing server input...\n");
+				char* line = strtok(buffer, "\r\n");
+				while (line != NULL)
+				{
+					fprintf(stdout, "%s\r\n", line);
+					//strcpy(pong, find_ping(line));
+					char* pong = find_ping(line);
+					if (pong != NULL)
+					{
+						fprintf(stdout, "%s\r\n", pong);
+						send(irc_sock, pong, strlen(pong), 0);
+						pong == NULL;
+					}
+					line = strtok(NULL, "\r\n");
+				}
 			}
 		}
 		else if (FD_ISSET(0, &fds)) // check if event occured on stdin
@@ -134,4 +149,24 @@ int main(int argc, char* argv[])
 	close(irc_sock);
 
 	return 0;
+}
+
+char* find_ping(char *msg)
+{
+	char *str, *result;
+	int position;
+
+	if (strstr(msg, "PING :") == msg)
+	{
+		//const char* ping_val = strchr(msg, ':');
+		//snprintf(str, sizeof(msg), "PONG :%s\r\n", ping_val + 1);
+		str = msg;
+		str[1] = 'O';
+	}
+	else
+		str = NULL;
+
+	//fprintf(stdout, "%s", str);
+
+	return str;
 }
